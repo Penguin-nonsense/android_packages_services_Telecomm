@@ -140,10 +140,17 @@ public class ConnectionServiceWrapper extends ServiceBinder implements
                 ParcelableConference conference, Session.Info sessionInfo) {
             Log.startSession(sessionInfo, LogUtils.Sessions.CSW_HANDLE_CREATE_CONNECTION_COMPLETE,
                     mPackageAbbreviation);
+            UserHandle callingUserHandle = Binder.getCallingUserHandle();
             long token = Binder.clearCallingIdentity();
             try {
                 synchronized (mLock) {
                     logIncoming("handleCreateConferenceComplete %s", callId);
+                    // Check status hints image for cross user access
+                    if (conference.getStatusHints() != null) {
+                        Icon icon = conference.getStatusHints().getIcon();
+                        conference.getStatusHints().setIcon(StatusHints.
+                                validateAccountIconUserBoundary(icon, callingUserHandle));
+                    }
                     ConnectionServiceWrapper.this
                             .handleCreateConferenceComplete(callId, request, conference);
 
@@ -1597,25 +1604,19 @@ public class ConnectionServiceWrapper extends ServiceBinder implements
                         .setIsAdhocConferenceCall(call.isAdhocConferenceCall())
                         .build();
 
-                if (mServiceInterface != null) {
-                    try {
-                        mServiceInterface.createConference(
-                                call.getConnectionManagerPhoneAccount(),
-                                callId,
-                                connectionRequest,
-                                call.shouldAttachToExistingConnection(),
-                                call.isUnknown(),
-                                Log.getExternalSession(TELECOM_ABBREVIATION));
+                try {
+                    mServiceInterface.createConference(
+                            call.getConnectionManagerPhoneAccount(),
+                            callId,
+                            connectionRequest,
+                            call.shouldAttachToExistingConnection(),
+                            call.isUnknown(),
+                            Log.getExternalSession(TELECOM_ABBREVIATION));
 
-                    } catch (RemoteException e) {
-                        Log.e(this, e, "Failure to createConference -- %s", getComponentName());
-                        mPendingResponses.remove(callId).handleCreateConferenceFailure(
-                                new DisconnectCause(DisconnectCause.ERROR, e.toString()));
-                    }
-                } else {
-                    Log.w(this,"Failure to createConference -- %s", getComponentName());
+                } catch (RemoteException e) {
+                    Log.e(this, e, "Failure to createConference -- %s", getComponentName());
                     mPendingResponses.remove(callId).handleCreateConferenceFailure(
-                            new DisconnectCause(DisconnectCause.ERROR));
+                            new DisconnectCause(DisconnectCause.ERROR, e.toString()));
                 }
             }
 
@@ -1705,25 +1706,19 @@ public class ConnectionServiceWrapper extends ServiceBinder implements
                         .setRttPipeToInCall(call.getCsToInCallRttPipeForCs())
                         .build();
 
-                if (mServiceInterface != null) {
-                    try {
-                        mServiceInterface.createConnection(
-                                call.getConnectionManagerPhoneAccount(),
-                                callId,
-                                connectionRequest,
-                                call.shouldAttachToExistingConnection(),
-                                call.isUnknown(),
-                                Log.getExternalSession(TELECOM_ABBREVIATION));
-                    } catch (RemoteException e) {
-                        Log.e(this, e, "Failure to createConnection -- %s", getComponentName());
+                try {
+                    mServiceInterface.createConnection(
+                            call.getConnectionManagerPhoneAccount(),
+                            callId,
+                            connectionRequest,
+                            call.shouldAttachToExistingConnection(),
+                            call.isUnknown(),
+                            Log.getExternalSession(TELECOM_ABBREVIATION));
+
+                } catch (RemoteException e) {
+                    Log.e(this, e, "Failure to createConnection -- %s", getComponentName());
                         mPendingResponses.remove(callId).handleCreateConnectionFailure(
                                 new DisconnectCause(DisconnectCause.ERROR, e.toString()));
-                    }
-                } else {
-                    Log.w(this, "Failure to createConnection; no service interface -- %s",
-                            getComponentName());
-                    mPendingResponses.remove(callId).handleCreateConnectionFailure(
-                            new DisconnectCause(DisconnectCause.ERROR));
                 }
             }
 
